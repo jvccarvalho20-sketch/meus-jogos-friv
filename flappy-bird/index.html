@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>O Pássaro Solitário</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #333; /* Fundo escuro */
+            font-family: 'Press Start 2P', cursive;
+            color: white;
+            text-align: center;
+        }
+        .game-container {
+            position: relative;
+            border: 4px solid #fff;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background-color: #87CEEB;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            border: 2px solid white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        #message-box.hidden {
+            display: none;
+        }
+        #message-title {
+            font-size: 24px;
+            margin: 0;
+        }
+        #message-text {
+            font-size: 16px;
+            margin: 0;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div id="message-box">
+            <h2 id="message-title">Carregando...</h2>
+            <p id="message-text">Aguarde o carregamento dos recursos...</p>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageBox = document.getElementById('message-box');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+
+        // Configurações do Jogo
+        let bird, pipes, score, gameState, frames, enemies, bullets, spawnedEnemies;
+        const gravity = 0.5;
+        const lift = -8;
+        const pipeWidth = 80;
+        const pipeGap = 220;
+        const pipeSpeed = 5;
+        const enemySpawnLevels = [10, 30, 50]; // Novos níveis de inimigos
+
+        // --- MÚSICA E SONS ---
+        const audioTracks = {
+            level1: new Audio('https://cdn.pixabay.com/audio/2022/08/18/audio_311626f671.mp3'),
+            level2: new Audio('https://cdn.pixabay.com/audio/2023/04/05/audio_24f36a8277.mp3'),
+            boss: new Audio('https://cdn.pixabay.com/audio/2022/01/24/audio_332152a4e2.mp3')
+        };
+        let currentTrack = null;
+        Object.values(audioTracks).forEach(track => {
+            track.loop = true;
+            track.volume = 0.5;
+        });
+
+        function manageMusic() {
+            let nextTrack = null;
+            if (score < 30) nextTrack = audioTracks.level1;
+            else if (score < 50) nextTrack = audioTracks.level2;
+            else nextTrack = audioTracks.boss;
+
+            if (currentTrack !== nextTrack) {
+                if (currentTrack) currentTrack.pause();
+                currentTrack = nextTrack;
+                currentTrack.currentTime = 0;
+                currentTrack.play().catch(e => console.log("Interação do usuário necessária para tocar música."));
+            }
+        }
+
+        // Carregamento de Imagens
+        const birdImg = new Image();
+        const enemyImg1 = new Image();
+        const enemyImg2 = new Image();
+        const bossImg = new Image();
+
+        const images = {
+            bird: { obj: birdImg, src: 'https://images.vexels.com/media/users/3/230516/isolated/preview/10174349f0f6d938d5ecaba3264b048c-plano-de-passaro-voando.png' },
+            enemy1: { obj: enemyImg1, src: 'https://www.nicepng.com/png/detail/111-1113933_acl-mk8-light-blue-shy-guy-os-inimigos.png' },
+            enemy2: { obj: enemyImg2, src: 'https://i.pinimg.com/236x/32/93/0f/32930ff5ece184bb0089ad3faec30691.jpg' },
+            boss: { obj: bossImg, src: 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEikLEOwmah5lvTiyPJ1jp1YhlYkEOZRfPZkTPvj7yJr0RU4FaPm-shYjkg2RF1GtClhdJWjMQbWALSvIsiXw814l_O0hVOUO7JR60fVSBJIA9IMyeT86OL2YM0GaNew2JBjukZ6FUXwUus/s1600/ChainChompMP8.png' }
+        };
+
+        let imagesLoaded = 0;
+        const totalImages = Object.keys(images).length;
+        for (const key in images) {
+            images[key].obj.src = images[key].src;
+            images[key].obj.onload = () => {
+                imagesLoaded++;
+                if (imagesLoaded === totalImages) {
+                    setup();
+                }
+            };
+            images[key].obj.onerror = () => {
+                console.error(`Falha ao carregar a imagem: ${images[key].src}`);
+                imagesLoaded++;
+                if (imagesLoaded === totalImages) setup();
+            };
+        }
+
+        function setCanvasSize() {
+            const aspectRatio = 9 / 16;
+            let width = Math.min(600, window.innerWidth * 0.95);
+            let height = width / aspectRatio;
+            if (height > window.innerHeight * 0.95) {
+                height = window.innerHeight * 0.95;
+                width = height * aspectRatio;
+            }
+            canvas.width = width;
+            canvas.height = height;
+        }
+
+        // --- CLASSES ---
+        class Bird {
+            constructor() { this.x = canvas.width / 4; this.y = canvas.height / 2; this.velocity = 0; this.width = 60; this.height = 50; }
+            draw() { ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.velocity / 40); ctx.drawImage(birdImg, -this.width / 2, -this.height / 2, this.width, this.height); ctx.restore(); }
+            update() { this.velocity += gravity; this.y += this.velocity; if (this.y + this.height / 2 > canvas.height - 20 || this.y - this.height / 2 < 0) gameOver(); }
+            flap() { this.velocity = lift; }
+        }
+
+        class Pipe {
+            constructor() { this.top = Math.random() * (canvas.height - pipeGap - 100) + 50; this.bottom = this.top + pipeGap; this.x = canvas.width; this.width = pipeWidth; this.passed = false; }
+            draw() { ctx.fillStyle = '#228B22'; ctx.strokeStyle = '#006400'; ctx.lineWidth = 4; ctx.fillRect(this.x, 0, this.width, this.top); ctx.strokeRect(this.x, 0, this.width, this.top); ctx.fillRect(this.x, this.bottom, this.width, canvas.height - this.bottom); ctx.strokeRect(this.x, this.bottom, this.width, canvas.height - this.bottom); }
+            update() { this.x -= pipeSpeed; }
+            offscreen() { return this.x < -this.width; }
+            hits(b) { const bL = b.x - b.width / 2, bR = b.x + b.width / 2, bT = b.y - b.height / 2, bB = b.y + b.height / 2; const pL = this.x, pR = this.x + this.width; const hitTop = bR > pL && bL < pR && bT < this.top; const hitBottom = bR > pL && bL < pR && bB > this.bottom; return hitTop || hitBottom; }
+        }
+
+        class Bullet {
+            constructor(x, y) { this.x = x; this.y = y; this.width = 20; this.height = 8; this.speed = 12; }
+            update() { this.x += this.speed; }
+            draw() { ctx.fillStyle = '#ff4500'; ctx.beginPath(); ctx.ellipse(this.x, this.y, this.width / 2, this.height / 2, 0, 0, Math.PI * 2); ctx.fill(); }
+            offscreen() { return this.x > canvas.width; }
+        }
+
+        class Enemy {
+            constructor(image, size) { this.image = image; this.x = canvas.width + size; this.y = Math.random() * (canvas.height - size - 50) + size / 2; this.width = size; this.height = size; this.speed = pipeSpeed * 0.5; }
+            update() { if (this.x > canvas.width * 0.75) this.x -= this.speed; }
+            draw() { ctx.drawImage(this.image, this.x - this.width / 2, this.y - this.height / 2, this.width, this.height); }
+            hits(o) { const oL = o.x - o.width / 2, oR = o.x + o.width / 2, oT = o.y - o.height / 2, oB = o.y + o.height / 2; const eL = this.x - this.width / 2, eR = this.x + this.width / 2, eT = this.y - this.height / 2, eB = this.y + this.height / 2; return oR > eL && oL < eR && oB > eT && oT < eB; }
+        }
+
+        // --- Funções do Jogo ---
+        function setup() {
+            setCanvasSize();
+            bird = new Bird(); pipes = []; enemies = []; bullets = []; score = 0; frames = 0; spawnedEnemies = {};
+            gameState = 'start';
+            if (currentTrack) { currentTrack.pause(); currentTrack = null; }
+            messageBox.classList.remove('hidden');
+            messageTitle.textContent = 'O Pássaro Solitário';
+            messageText.innerHTML = 'Espaço/Toque: Voar<br>Enter: Atirar';
+            draw();
+        }
+
+        function startGame() {
+            if (gameState !== 'playing') { gameState = 'playing'; messageBox.classList.add('hidden'); manageMusic(); gameLoop(); }
+        }
+
+        function gameOver() {
+            gameState = 'over'; if (currentTrack) currentTrack.pause();
+            messageBox.classList.remove('hidden');
+            messageTitle.textContent = 'Game Over';
+            messageText.textContent = `Pontuação: ${score}. Pressione Espaço para reiniciar.`;
+        }
+
+        function gameWon() {
+            gameState = 'won'; if (currentTrack) currentTrack.pause();
+            messageBox.classList.remove('hidden');
+            messageTitle.textContent = 'Parabéns!';
+            messageText.textContent = `Você venceu! Pontuação Final: ${score}`;
+        }
+
+        function spawnEnemy(level) {
+            let enemyImg, size = 100;
+            if (level === 50) { enemyImg = bossImg; size = 150; }
+            else if (level === 30) { enemyImg = enemyImg2; size = 120; }
+            else { enemyImg = enemyImg1; }
+            enemies.push(new Enemy(enemyImg, size));
+        }
+
+        // --- Desenho e Atualização ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let p of pipes) p.draw();
+            for (let e of enemies) e.draw();
+            for (let b of bullets) b.draw();
+            bird.draw();
+            ctx.fillStyle = '#DEB887'; ctx.fillRect(0, canvas.height - 20, canvas.width, 20); ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 4; ctx.strokeRect(0, canvas.height - 20, canvas.width, 20);
+            ctx.font = '30px "Press Start 2P"'; ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 4; ctx.textAlign = 'center';
+            ctx.strokeText(score, canvas.width / 2, 50); ctx.fillText(score, canvas.width / 2, 50);
+        }
+
+        function update() {
+            bird.update();
+            manageMusic();
+
+            if (gameState === 'playing') {
+                if (frames % 90 === 0) pipes.push(new Pipe());
+                for (let i = pipes.length - 1; i >= 0; i--) {
+                    pipes[i].update();
+                    if (pipes[i].hits(bird)) { gameOver(); return; }
+                    if (!pipes[i].passed && pipes[i].x + pipes[i].width < bird.x - bird.width / 2) { pipes[i].passed = true; score++; }
+                    if (pipes[i].offscreen()) pipes.splice(i, 1);
+                }
+                const levelToSpawn = enemySpawnLevels.find(level => score >= level && !spawnedEnemies[level]);
+                if (levelToSpawn) {
+                    spawnEnemy(levelToSpawn); spawnedEnemies[levelToSpawn] = true;
+                    gameState = 'boss_battle';
+                }
+            }
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].update();
+                if (bullets[i].offscreen()) bullets.splice(i, 1);
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].update();
+                if (enemies[i].hits(bird)) { gameOver(); return; }
+                let hitByBullet = false;
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    if (enemies[i].hits(bullets[j])) {
+                        bullets.splice(j, 1); hitByBullet = true; break;
+                    }
+                }
+                if (hitByBullet) {
+                    const wasBoss = score >= 50 && spawnedEnemies[50];
+                    enemies.splice(i, 1);
+                    if (gameState === 'boss_battle' && enemies.length === 0) {
+                        if (wasBoss) { gameWon(); return; }
+                        gameState = 'playing';
+                    }
+                }
+            }
+        }
+
+        function gameLoop() {
+            if (gameState === 'over' || gameState === 'won') return;
+            update();
+            draw();
+            frames++;
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // --- Controles ---
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (gameState === 'playing' || gameState === 'boss_battle') bird.flap();
+                else if (gameState === 'start') startGame();
+                else setup();
+            } else if (e.code === 'Enter') {
+                e.preventDefault();
+                if (gameState === 'playing' || gameState === 'boss_battle') bullets.push(new Bullet(bird.x + bird.width / 2, bird.y));
+                else if (gameState === 'start') startGame();
+            }
+        });
+
+        canvas.addEventListener('click', () => {
+            if (gameState === 'playing' || gameState === 'boss_battle') bird.flap();
+            else if (gameState === 'start') startGame();
+            else setup();
+        });
+        
+        window.addEventListener('resize', setup);
+    </script>
+</body>
+</html>
+
