@@ -2,116 +2,83 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Meu Friv Pessoal</title>
+    <title>Meu Friv Espacial</title>
     <style>
         body { 
-            background-color: #2c3e50; 
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
             color: white; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0; padding: 20px;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0; overflow-x: hidden; min-height: 100vh;
             text-align: center;
         }
-        h1 { text-shadow: 2px 2px #000; }
+
+        /* --- ANIMAÇÕES DE FUNDO --- */
+        .sky { position: fixed; width: 100%; height: 100%; z-index: -1; }
         
-        /* Grade estilo Friv */
+        /* Estrela Cadente */
+        .star {
+            position: absolute; left: 50%; top: 50%; height: 2px;
+            background: linear-gradient(-45deg, #5f91ff, rgba(0, 0, 255, 0));
+            filter: drop-shadow(0 0 6px #699bff);
+            animation: tail 3000s ease-in-out infinite, shooting 3000ms ease-in-out infinite;
+        }
+
+        /* Nuvens */
+        .cloud {
+            position: absolute; background: rgba(255, 255, 255, 0.1);
+            width: 200px; height: 60px; border-radius: 200px;
+            animation: moveClouds 20s linear infinite;
+        }
+        .cloud:after, .cloud:before {
+            content: ''; position: absolute; background: rgba(255, 255, 255, 0.1);
+            width: 100px; height: 80px; top: -40px; left: 10px; border-radius: 100px;
+        }
+        .cloud:after { width: 120px; height: 120px; top: -70px; left: 70px; }
+
+        @keyframes moveClouds {
+            from { left: -250px; } to { left: 100%; }
+        }
+        @keyframes shooting {
+            0% { transform: translateX(0) translateY(0) rotate(45deg) scale(0); }
+            10% { transform: translateX(-500px) translateY(500px) rotate(45deg) scale(1); }
+            20% { transform: translateX(-1000px) translateY(1000px) rotate(45deg) scale(0); }
+            100% { transform: translateX(-1000px) translateY(1000px) rotate(45deg) scale(0); }
+        }
+
+        /* --- GRADE DE JOGOS --- */
         .friv-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 15px;
-            max-width: 1000px;
-            margin: 40px auto;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px; max-width: 900px; margin: 50px auto; padding: 20px;
+            position: relative; z-index: 1;
         }
 
-        /* Os quadradinhos dos jogos */
         .game-item {
-            position: relative;
-            aspect-ratio: 1 / 1;
-            border: 4px solid #ecf0f1;
-            border-radius: 8px;
-            overflow: hidden;
-            transition: transform 0.2s, border-color 0.2s;
-            background: #34495e;
-            text-decoration: none;
-            color: white;
-            display: block;
+            position: relative; aspect-ratio: 1/1; border: 4px solid #fff;
+            border-radius: 12px; overflow: hidden; transition: 0.3s;
+            cursor: pointer; text-decoration: none; color: white; display: block;
         }
 
-        .game-item:hover {
-            transform: scale(1.1);
-            border-color: #f1c40f; /* Amarelo Friv */
-            z-index: 10;
-        }
-
-        .game-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .game-name {
-            position: absolute;
-            bottom: 0;
-            background: rgba(0,0,0,0.7);
-            width: 100%;
-            font-size: 12px;
-            padding: 5px 0;
-        }
+        .game-item:hover { transform: scale(1.15); border-color: #f1c40f; box-shadow: 0 0 20px #f1c40f; }
+        .game-item img { width: 100%; height: 100%; object-fit: cover; }
+        .game-name { position: absolute; bottom: 0; background: rgba(0,0,0,0.8); width: 100%; padding: 5px 0; font-size: 13px; }
     </style>
 </head>
 <body>
 
-    <h1>🎮 MEUS JOGOS</h1>
-
-    <div class="friv-grid">
-        <a href="flappy-bird/" class="game-item">
-            <img src="flappy-bird/thumb.png" alt="Flappy Bird">
-            <div class="game-name">Flappy Bird - O Clone</div>
-        </a>
-
-        <a href="resgate-a-vila/" class="game-item">
-            <img src="resgate-a-vila/thumb.png" alt="Resgate a Vila">
-            <div class="game-name">Resgate a Vila</div>
-        </a>
-
-        <a href="tic_tac_toe/" class="game-item">
-            <img src="tic_tac_toe/thumb.png" alt="Tic Tac Toe">
-            <div class="game-name">Jogo da Velha - Divertam</div>
-        </a>
-
-         <a href="snake-game/" class="game-item">
-            <img src="snake-game/thumb.png" alt="Snake Game">
-            <div class="game-name">Jogo da Cobrinha</div>
+    <div class="sky">
+        <div class="star"></div>
+        <div class="cloud" style="top: 10%; animation-duration: 25s;"></div>
+        <div class="cloud" style="top: 30%; animation-duration: 40s; opacity: 0.05;"></div>
     </div>
 
-    <script>
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    <h1>🎮 MEUS JOGOS ONLINE</h1>
 
-        function playHoverSound() {
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-
-            oscillator.type = 'sine'; 
-            oscillator.frequency.setValueAtTime(440, audioCtx.currentTime); 
-            
-            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-
-            oscillator.start();
-            oscillator.stop(audioCtx.currentTime + 0.1);
-        }
-
-        document.querySelectorAll('.game-item').forEach(item => {
-            item.addEventListener('mouseenter', () => {
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-                playHoverSound();
-            });
-        });
-    </script>
+    <div class="friv-grid">
+        <a href="flappy-bird/" class="game-item"><img src="flappy-bird/thumb.png"><div class="game-name">Flappy Bird</div></a>
+        <a href="snake-game/" class="game-item"><img src="snake-game/thumb.png"><div class="game-name">Snake</div></a>
+        <a href="tic-tac-toe/" class="game-item"><img src="tic-tac-toe/thumb.png"><div class="game-name">Tic Tac Toe</div></a>
+        <a href="resgate-a-vila/" class="game-item"><img src="resgate-a-vila/thumb.png"><div class="game-name">Resgate a Vila</div></a>
+    </div>
 
 </body>
 </html>
