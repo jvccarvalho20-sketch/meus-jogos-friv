@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Resgate da Vila: Jogo FPS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Orbitron', sans-serif;
+            color: white;
+        }
+        canvas { display: block; }
+
+        /* --- NOVO: BARRA DE NAVEGAÇÃO --- */
+        .top-nav {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 2000;
+            pointer-events: all;
+        }
+        .btn-nav {
+            background: rgba(0, 255, 255, 0.2);
+            color: #0ff;
+            border: 2px solid #0ff;
+            padding: 10px 20px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            text-decoration: none;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: 0.3s;
+        }
+        .btn-nav:hover { background: #0ff; color: #000; }
+        .btn-mute.off { border-color: #f0f; color: #f0f; }
+
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            text-align: center;
+            pointer-events: none;
+        }
+        .modal {
+            background-color: rgba(0, 10, 30, 0.85);
+            border: 2px solid #0ff;
+            box-shadow: 0 0 25px #0ff;
+            border-radius: 15px;
+            padding: 30px;
+            pointer-events: all;
+            animation: fadeIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        h1 { font-size: 2.5rem; color: #f0f; text-shadow: 0 0 10px #f0f; }
+        button {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            padding: 15px 30px;
+            background-color: #f0f;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 0 15px #f0f;
+        }
+
+        #hud {
+            position: absolute;
+            top: 80px; /* Ajustado para não bater nos botões */
+            left: 10px;
+            width: calc(100% - 20px);
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2rem;
+            pointer-events: none;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            border: 2px solid #0ff;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+        }
+        #boss-hp-bar { width: 50%; height: 20px; background: #333; border: 2px solid #f00; margin: 10px auto; }
+        #boss-hp { width: 100%; height: 100%; background: #f00; }
+
+        /* Mobile Controls */
+        #mobile-controls { display: none; }
+        #joystick-area { position: absolute; bottom: 20px; left: 20px; width: 120px; height: 120px; background: rgba(0,255,255,0.1); border-radius: 50%; }
+        #joystick-knob { position: absolute; width: 50px; height: 50px; background: rgba(0,255,255,0.4); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #shoot-button { position: absolute; bottom: 20px; right: 20px; width: 70px; height: 70px; background: rgba(255,0,255,0.5); border-radius: 50%; }
+        @media (max-width: 768px) { #mobile-controls { display: block; } }
+    </style>
+</head>
+<body>
+
+    <div class="top-nav">
+        <button id="btnMute" class="btn-nav">🔊 SOM: ON</button>
+    </div>
+
+    <div id="crosshair"></div>
+    <div id="hud">
+        <div id="mission-display">Missão: 1</div>
+        <div id="enemies-display">Inimigos: 10</div>
+        <div id="stars-display">★ 0</div>
+    </div>
+    
+    <div id="start-screen" class="ui-overlay">
+        <div class="modal">
+            <h1>Resgate da Vila</h1>
+            <p>Os inimigos invadiram! Salve a vila.</p>
+            <button id="start-button">INICIAR JOGO</button>
+        </div>
+    </div>
+    
+    <div id="mission-complete-screen" class="ui-overlay" style="display: none;">
+        <div class="modal">
+            <h1 id="mission-complete-title">MISSÃO COMPLETA</h1>
+            <button id="next-mission-button">AVANÇAR</button>
+        </div>
+    </div>
+
+    <div id="game-over-screen" class="ui-overlay" style="display: none;">
+         <div class="modal">
+            <h1>FIM DE JOGO</h1>
+            <button onclick="location.reload()">TENTAR NOVAMENTE</button>
+        </div>
+    </div>
+
+    <div id="victory-screen" class="ui-overlay" style="display: none;">
+        <div class="modal">
+            <h1>VITÓRIA!</h1>
+            <p>Você é o herói da vila!</p>
+            <button onclick="location.reload()">REJOGAR</button>
+        </div>
+    </div>
+
+    <div id="boss-hud" class="ui-overlay" style="display: none; justify-content: flex-start; padding-top: 120px;">
+        <h2>CHEFE FINAL</h2>
+        <div id="boss-hp-bar"><div id="boss-hp"></div></div>
+    </div>
+
+    <div id="mobile-controls">
+        <div id="joystick-area"><div id="joystick-knob"></div></div>
+        <div id="shoot-button"></div>
+    </div>
+
+    <audio id="bgMusic" loop>
+        <source src="musica.mp3" type="audio/mpeg">
+    </audio>
+
+    <script type="importmap">
+        { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+                       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/" } }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // Elementos UI
+        const bgMusic = document.getElementById('bgMusic');
+        const btnMute = document.getElementById('btnMute');
+        let isMuted = false;
+
+        // Configuração de Som
+        btnMute.addEventListener('click', (e) => {
+            isMuted = !isMuted;
+            bgMusic.muted = isMuted;
+            btnMute.innerText = isMuted ? "🔇 SOM: OFF" : "🔊 SOM: ON";
+            btnMute.classList.toggle('off', isMuted);
+        });
+
+        function playMusic() {
+            if(!isMuted) bgMusic.play().catch(() => console.log("Interação necessária"));
+        }
+
+        // --- Variáveis do Jogo ---
+        let camera, scene, renderer, controls;
+        let clock = new THREE.Clock();
+        const objects = [];
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let velocity = new THREE.Vector3(), direction = new THREE.Vector3();
+        let enemies = [], projectiles = [], currentMission = 1, totalStars = 0, boss = null;
+        const BOSS_MAX_HP = 300;
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000510);
+            scene.fog = new THREE.Fog(0x000510, 0, 300);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            controls = new PointerLockControls(camera, renderer.domElement);
+            scene.add(controls.getObject());
+
+            const ambientLight = new THREE.AmbientLight(0x404040, 2);
+            scene.add(ambientLight);
+            const sun = new THREE.DirectionalLight(0x00ffff, 1);
+            sun.position.set(10, 20, 10);
+            scene.add(sun);
+
+            setupEventListeners();
+            setupMission(currentMission);
+            animate();
+        }
+
+        function setupMission(missionNumber) {
+            objects.forEach(o => scene.remove(o));
+            enemies.forEach(e => scene.remove(e.mesh));
+            projectiles.forEach(p => scene.remove(p.mesh));
+            enemies = []; projectiles = [];
+            if(boss) scene.remove(boss.mesh); boss = null;
+
+            // Chão Grid
+            const grid = new THREE.GridHelper(1000, 50, 0x00ffff, 0x002222);
+            scene.add(grid);
+            objects.push(grid);
+
+            if (missionNumber < 10) {
+                const count = 5 + missionNumber;
+                for (let i = 0; i < count; i++) {
+                    const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, 8, 4), new THREE.MeshPhongMaterial({color: 0xff00ff}));
+                    mesh.position.set((Math.random()-0.5)*200, 4, (Math.random()-0.5)*200);
+                    scene.add(mesh);
+                    enemies.push({ mesh, hp: 1 });
+                }
+            } else {
+                document.getElementById('boss-hud').style.display = 'block';
+                const mesh = new THREE.Mesh(new THREE.SphereGeometry(15, 32, 32), new THREE.MeshPhongMaterial({color: 0xff0000, emissive: 0x330000}));
+                mesh.position.set(0, 15, -100);
+                scene.add(mesh);
+                boss = { mesh, hp: BOSS_MAX_HP, lastAttack: 0 };
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('mission-display').textContent = `Missão: ${currentMission}`;
+            document.getElementById('enemies-display').textContent = boss ? "CHEFE" : `Inimigos: ${enemies.length}`;
+            document.getElementById('stars-display').textContent = `★ ${totalStars}`;
+            if(boss) document.getElementById('boss-hp').style.width = `${(boss.hp/BOSS_MAX_HP)*100}%`;
+        }
+
+        function shoot() {
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera({x:0, y:0}, camera);
+            const targets = enemies.map(e => e.mesh);
+            if(boss) targets.push(boss.mesh);
+            
+            const intersects = ray.intersectObjects(targets);
+            if(intersects.length > 0) {
+                const hitMesh = intersects[0].object;
+                if(boss && hitMesh === boss.mesh) {
+                    boss.hp -= 20;
+                    if(boss.hp <= 0) {
+                        scene.remove(boss.mesh);
+                        document.getElementById('victory-screen').style.display = 'flex';
+                        controls.unlock();
+                    }
+                } else {
+                    const idx = enemies.findIndex(e => e.mesh === hitMesh);
+                    if(idx > -1) {
+                        scene.remove(enemies[idx].mesh);
+                        enemies.splice(idx, 1);
+                    }
+                }
+                updateUI();
+                if(enemies.length === 0 && !boss) {
+                    totalStars += 3;
+                    document.getElementById('mission-complete-screen').style.display = 'flex';
+                    controls.unlock();
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            if (controls.isLocked) {
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+
+                // Boss AI
+                if(boss) {
+                    boss.mesh.lookAt(camera.position);
+                    if(clock.getElapsedTime() - boss.lastAttack > 2) {
+                        boss.lastAttack = clock.getElapsedTime();
+                        const pMesh = new THREE.Mesh(new THREE.SphereGeometry(2), new THREE.MeshBasicMaterial({color: 0xff0000}));
+                        pMesh.position.copy(boss.mesh.position);
+                        const dir = new THREE.Vector3().subVectors(camera.position, boss.mesh.position).normalize();
+                        projectiles.push({mesh: pMesh, dir: dir.multiplyScalar(50)});
+                        scene.add(pMesh);
+                    }
+                }
+
+                // Projectiles
+                for(let i = projectiles.length-1; i>=0; i--) {
+                    const p = projectiles[i];
+                    p.mesh.position.add(p.dir.clone().multiplyScalar(delta));
+                    if(p.mesh.position.distanceTo(camera.position) < 5) {
+                        document.getElementById('game-over-screen').style.display = 'flex';
+                        controls.unlock();
+                        bgMusic.pause();
+                    }
+                }
+            }
+            renderer.render(scene, camera);
+        }
+
+        function setupEventListeners() {
+            document.getElementById('start-button').onclick = () => {
+                document.getElementById('start-screen').style.display = 'none';
+                controls.lock();
+                playMusic();
+            };
+            document.getElementById('next-mission-button').onclick = () => {
+                currentMission++;
+                setupMission(currentMission);
+                document.getElementById('mission-complete-screen').style.display = 'none';
+                controls.lock();
+            };
+            document.addEventListener('keydown', (e) => {
+                switch(e.code) {
+                    case 'KeyW': moveForward = true; break;
+                    case 'KeyS': moveBackward = true; break;
+                    case 'KeyA': moveLeft = true; break;
+                    case 'KeyD': moveRight = true; break;
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                switch(e.code) {
+                    case 'KeyW': moveForward = false; break;
+                    case 'KeyS': moveBackward = false; break;
+                    case 'KeyA': moveLeft = false; break;
+                    case 'KeyD': moveRight = false; break;
+                }
+            });
+            document.addEventListener('mousedown', () => { if(controls.isLocked) shoot(); });
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>

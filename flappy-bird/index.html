@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>O Pássaro Solitário</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            background-color: #333;
+            font-family: 'Press Start 2P', cursive;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        /* --- BARRA DE NAVEGAÇÃO --- */
+        .game-controls {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 1000;
+        }
+        .btn-ui {
+            background: #f1c40f;
+            color: #000;
+            border: 4px solid #b8960c;
+            padding: 10px 15px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 10px;
+            text-decoration: none;
+            cursor: pointer;
+            box-shadow: 0 4px #000;
+        }
+        .btn-ui:active { transform: translateY(4px); box-shadow: 0 0 #000; }
+        .btn-mute { background: #fff; border-color: #ccc; }
+        .btn-mute.off { background: #ff4d4d; color: white; border-color: #a30000; }
+
+        .game-container {
+            position: relative;
+            border: 4px solid #fff;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 50px;
+        }
+        canvas {
+            display: block;
+            background-color: #87CEEB;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            background-color: rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            border: 2px solid white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        #message-box.hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="game-controls">
+        <button id="btnMute" class="btn-ui btn-mute">🔊 SOM: ON</button>
+    </div>
+
+    <div class="game-container">
+        <div id="message-box">
+            <h2 id="message-title">Carregando...</h2>
+            <p id="message-text">Aguarde o carregamento...</p>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <audio id="bgMusic" loop>
+        <source src="flappysong.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageBox = document.getElementById('message-box');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+        const btnMute = document.getElementById('btnMute');
+        const bgMusic = document.getElementById('bgMusic');
+
+        // Configurações do Jogo
+        let bird, pipes, score, gameState, frames, enemies, bullets, spawnedEnemies;
+        const gravity = 0.5;
+        const lift = -8;
+        const pipeWidth = 80;
+        const pipeGap = 220;
+        const pipeSpeed = 5;
+        const enemySpawnLevels = [10, 30, 50];
+
+        // --- SISTEMA DE MUTE CORRIGIDO ---
+        let isMuted = false;
+        btnMute.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation(); // IMPORTANTE: impede o pulo do pássaro ao clicar no botão
+            isMuted = !isMuted;
+            bgMusic.muted = isMuted;
+            
+            if(isMuted) {
+                btnMute.innerText = "🔇 SOM: OFF";
+                btnMute.classList.add('off');
+            } else {
+                btnMute.innerText = "🔊 SOM: ON";
+                btnMute.classList.remove('off');
+                if(gameState === 'playing' || gameState === 'boss_battle') bgMusic.play().catch(() => {});
+            }
+        });
+
+        // --- CARREGAMENTO DE IMAGENS ---
+        const birdImg = new Image(); const enemyImg1 = new Image(); const enemyImg2 = new Image(); const bossImg = new Image();
+        const images = {
+            bird: { obj: birdImg, src: 'https://images.vexels.com/media/users/3/230516/isolated/preview/10174349f0f6d938d5ecaba3264b048c-plano-de-passaro-voando.png' },
+            enemy1: { obj: enemyImg1, src: 'https://www.nicepng.com/png/detail/111-1113933_acl-mk8-light-blue-shy-guy-os-inimigos.png' },
+            enemy2: { obj: enemyImg2, src: 'https://i.pinimg.com/236x/32/93/0f/32930ff5ece184bb0089ad3faec30691.jpg' },
+            boss: { obj: bossImg, src: 'https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEikLEOwmah5lvTiyPJ1jp1YhlYkEOZRfPZkTPvj7yJr0RU4FaPm-shYjkg2RF1GtClhdJWjMQbWALSvIsiXw814l_O0hVOUO7JR60fVSBJIA9IMyeT86OL2YM0GaNew2JBjukZ6FUXwUus/s1600/ChainChompMP8.png' }
+        };
+
+        let imagesLoaded = 0;
+        for (const key in images) {
+            images[key].obj.src = images[key].src;
+            images[key].obj.onload = () => {
+                imagesLoaded++;
+                if (imagesLoaded === 4) setup();
+            };
+        }
+
+        function setCanvasSize() {
+            const aspectRatio = 9 / 16;
+            let width = Math.min(400, window.innerWidth * 0.9);
+            canvas.width = width;
+            canvas.height = width / aspectRatio;
+        }
+
+        // --- CLASSES ---
+        class Bird {
+            constructor() { this.x = canvas.width / 4; this.y = canvas.height / 2; this.velocity = 0; this.width = 50; this.height = 40; }
+            draw() { ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.velocity / 20); ctx.drawImage(birdImg, -this.width / 2, -this.height / 2, this.width, this.height); ctx.restore(); }
+            update() { this.velocity += gravity; this.y += this.velocity; if (this.y > canvas.height - 20 || this.y < 0) gameOver(); }
+            flap() { this.velocity = lift; }
+        }
+
+        class Pipe {
+            constructor() { this.top = Math.random() * (canvas.height - pipeGap - 100) + 50; this.bottom = this.top + pipeGap; this.x = canvas.width; this.width = pipeWidth; this.passed = false; }
+            draw() { ctx.fillStyle = '#228B22'; ctx.fillRect(this.x, 0, this.width, this.top); ctx.fillRect(this.x, this.bottom, this.width, canvas.height - this.bottom); }
+            update() { this.x -= pipeSpeed; }
+            hits(b) { return (b.x + b.width/2 > this.x && b.x - b.width/2 < this.x + this.width) && (b.y - b.height/2 < this.top || b.y + b.height/2 > this.bottom); }
+        }
+
+        class Bullet {
+            constructor(x, y) { this.x = x; this.y = y; this.width = 15; this.height = 8; this.speed = 10; }
+            update() { this.x += this.speed; }
+            draw() { ctx.fillStyle = 'orange'; ctx.fillRect(this.x, this.y, this.width, this.height); }
+        }
+
+        class Enemy {
+            constructor(image, size) { this.image = image; this.x = canvas.width + 50; this.y = Math.random() * (canvas.height - 100) + 50; this.width = size; this.height = size; }
+            update() { this.x -= 2; }
+            draw() { ctx.drawImage(this.image, this.x, this.y, this.width, this.height); }
+            hits(o) { return o.x < this.x + this.width && o.x + o.width > this.x && o.y < this.y + this.height && o.y + o.height > this.y; }
+        }
+
+        // --- FUNÇÕES DO JOGO ---
+        function setup() {
+            setCanvasSize();
+            bird = new Bird(); pipes = []; enemies = []; bullets = []; score = 0; frames = 0; spawnedEnemies = {};
+            gameState = 'start';
+            bgMusic.pause();
+            bgMusic.currentTime = 0;
+            messageBox.classList.remove('hidden');
+            messageTitle.textContent = 'Flappy Bird';
+            messageText.innerHTML = 'Clique para Voar<br>Enter para Atirar';
+            draw();
+        }
+
+        function startGame() {
+            if (gameState !== 'playing') { 
+                gameState = 'playing'; 
+                messageBox.classList.add('hidden'); 
+                if(!isMuted) bgMusic.play().catch(() => {});
+                gameLoop(); 
+            }
+        }
+
+        function gameOver() {
+            gameState = 'over'; 
+            bgMusic.pause();
+            messageBox.classList.remove('hidden');
+            messageTitle.textContent = 'Game Over';
+            messageText.textContent = `Score: ${score}. Clique p/ reiniciar.`;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let p of pipes) p.draw();
+            for (let e of enemies) e.draw();
+            for (let b of bullets) b.draw();
+            bird.draw();
+            ctx.font = '16px "Press Start 2P"'; ctx.fillStyle = 'white';
+            ctx.fillText(`PONTOS: ${score}`, 20, 40);
+        }
+
+        function update() {
+            bird.update();
+            if (gameState === 'playing' || gameState === 'boss_battle') {
+                if (frames % 100 === 0 && gameState === 'playing') pipes.push(new Pipe());
+                
+                for (let i = pipes.length - 1; i >= 0; i--) {
+                    pipes[i].update();
+                    if (pipes[i].hits(bird)) gameOver();
+                    if (!pipes[i].passed && pipes[i].x < bird.x) { pipes[i].passed = true; score++; }
+                    if (pipes[i].x < -pipeWidth) pipes.splice(i, 1);
+                }
+
+                // Spawn de Inimigos
+                let lvl = enemySpawnLevels.find(l => score >= l && !spawnedEnemies[l]);
+                if (lvl) { 
+                    let img = lvl === 50 ? bossImg : (lvl === 30 ? enemyImg2 : enemyImg1);
+                    enemies.push(new Enemy(img, lvl === 50 ? 100 : 60));
+                    spawnedEnemies[lvl] = true; 
+                }
+            }
+
+            bullets.forEach((b, i) => { b.update(); if(b.x > canvas.width) bullets.splice(i, 1); });
+
+            enemies.forEach((e, i) => {
+                e.update();
+                if(e.hits(bird)) gameOver();
+                bullets.forEach((b, j) => {
+                    if(e.hits(b)) { enemies.splice(i, 1); bullets.splice(j, 1); }
+                });
+            });
+        }
+
+        function gameLoop() {
+            if (gameState === 'over') return;
+            update(); draw(); frames++;
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- CONTROLES ---
+        function handleInteraction() {
+            if (gameState === 'playing' || gameState === 'boss_battle') bird.flap();
+            else if (gameState === 'start') startGame();
+            else setup();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                e.preventDefault();
+                handleInteraction();
+            }
+            if (e.code === 'Enter') {
+                bullets.push(new Bullet(bird.x, bird.y));
+            }
+        });
+
+        canvas.addEventListener('click', handleInteraction);
+        window.addEventListener('resize', setCanvasSize);
+    </script>
+</body>
+</html>
