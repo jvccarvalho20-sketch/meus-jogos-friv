@@ -63,7 +63,9 @@
         .game-name { position: absolute; bottom: 0; background: rgba(0,0,0,0.8); width: 100%; padding: 5px 0; font-size: 13px; }
     </style>
 </head>
-<body>
+<body onclick="iniciarSom()">
+
+    <div id="youtube-player" style="display:none"></div>
 
     <div class="sky">
         <div class="star"></div>
@@ -80,5 +82,46 @@
         <a href="resgate-a-vila/" class="game-item"><img src="resgate-a-vila/thumb.png"><div class="game-name">Resgate a Vila</div></a>
     </div>
 
+    <script>
+        // Carrega a API do YouTube
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        var player;
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('youtube-player', {
+                height: '0', width: '0',
+                videoId: '-hBzOia4aoA',
+                playerVars: { 'autoplay': 1, 'loop': 1, 'playlist': '-hBzOia4aoA' }
+            });
+        }
+
+        // Contexto de áudio para o efeito SNES
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSnesBeep() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square'; 
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime); 
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function iniciarSom() {
+            if (player && player.playVideo) player.playVideo();
+        }
+
+        document.querySelectorAll('.game-item').forEach(item => {
+            item.addEventListener('mouseenter', playSnesBeep);
+        });
+    </script>
 </body>
 </html>
