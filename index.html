@@ -9,6 +9,7 @@
             color: white; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0; padding: 20px;
+            text-align: center;
         }
         h1 { text-shadow: 2px 2px #000; }
         
@@ -30,6 +31,9 @@
             overflow: hidden;
             transition: transform 0.2s, border-color 0.2s;
             background: #34495e;
+            text-decoration: none;
+            color: white;
+            display: block;
         }
 
         .game-item:hover {
@@ -74,6 +78,36 @@
             <div class="game-name">Tic Tac Toe</div>
         </a>
     </div>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playHoverSound() {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.type = 'sine'; 
+            oscillator.frequency.setValueAtTime(440, audioCtx.currentTime); 
+            
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.1);
+        }
+
+        document.querySelectorAll('.game-item').forEach(item => {
+            item.addEventListener('mouseenter', () => {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                playHoverSound();
+            });
+        });
+    </script>
 
 </body>
 </html>
