@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo da Velha Interativo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Bungee&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --primary-color: #e94560;
+            --secondary-color: #0f3460;
+            --accent-color: #53d9d1;
+            --font-color: #fff;
+        }
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--font-color);
+            font-family: 'Bungee', cursive;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: slideInUp 0.7s ease-out;
+        }
+        @keyframes slideInUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        h1 {
+            font-size: 3rem;
+            color: var(--primary-color);
+            text-shadow: 0 0 10px var(--primary-color);
+            margin-bottom: 10px;
+        }
+        #status-display {
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            height: 50px;
+            margin-bottom: 15px;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 10px;
+            position: relative;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: var(--secondary-color);
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 4rem;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+        }
+        .cell:not(.x):not(.o):hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px var(--accent-color);
+        }
+        .cell.x::before, .cell.o::before {
+            animation: popIn 0.3s ease-out;
+        }
+        .cell.x { color: var(--primary-color); }
+        .cell.o { color: var(--accent-color); }
+        
+        .cell.x::before { content: 'X'; }
+        .cell.o::before { content: 'O'; }
+
+        .winning-cell {
+            animation: bounce 0.6s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        #restart-button {
+            font-family: 'Bungee', cursive;
+            margin-top: 25px;
+            padding: 12px 30px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 50px;
+            background-color: var(--primary-color);
+            color: var(--font-color);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(233, 69, 96, 0.4);
+        }
+        #restart-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(233, 69, 96, 0.6);
+        }
+        #restart-button:active {
+            transform: translateY(1px);
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.2); opacity: 0; }
+            80% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @media (max-width: 400px) {
+            h1 { font-size: 2.2rem; }
+            #board {
+                grid-template-columns: repeat(3, 80px);
+                grid-template-rows: repeat(3, 80px);
+            }
+            .cell { width: 80px; height: 80px; font-size: 3rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>JOGO DA VELHA</h1>
+        <div id="status-display">Vez do Jogador X</div>
+        <div id="board"></div>
+        <button id="restart-button">REINICIAR</button>
+    </div>
+
+    <script>
+        const board = document.getElementById('board');
+        const statusDisplay = document.getElementById('status-display');
+        const restartButton = document.getElementById('restart-button');
+
+        // --- Variáveis do Jogo ---
+        let currentPlayer = 'X';
+        let gameState = ["", "", "", "", "", "", "", "", ""];
+        let gameActive = true;
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Horizontais
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Verticais
+            [0, 4, 8], [2, 4, 6]             // Diagonais
+        ];
+
+        // --- Efeitos Sonoros ---
+        const clickSound = new Tone.MembraneSynth({
+            pitchDecay: 0.01,
+            octaves: 6,
+            envelope: { attack: 0.001, decay: 0.2, sustain: 0 },
+        }).toDestination();
+        
+        const winSound = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "fatsawtooth" },
+            envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 },
+        }).toDestination();
+        
+        const drawSound = () => new Tone.Synth().toDestination().triggerAttackRelease("E4", "8n");
+
+        // --- Funções do Jogo ---
+        function handleCellClick(clickedCellEvent) {
+            const clickedCell = clickedCellEvent.target;
+            const clickedCellIndex = parseInt(clickedCell.getAttribute('data-cell-index'));
+
+            if (gameState[clickedCellIndex] !== "" || !gameActive) {
+                return;
+            }
+
+            // Tocar som
+            clickSound.triggerAttackRelease("C2", "8n");
+
+            gameState[clickedCellIndex] = currentPlayer;
+            clickedCell.classList.add(currentPlayer.toLowerCase());
+            
+            checkResult();
+        }
+
+        function checkResult() {
+            let roundWon = false;
+            let winningCombo = [];
+            for (let i = 0; i < winningConditions.length; i++) {
+                const winCondition = winningConditions[i];
+                let a = gameState[winCondition[0]];
+                let b = gameState[winCondition[1]];
+                let c = gameState[winCondition[2]];
+                if (a === '' || b === '' || c === '') {
+                    continue;
+                }
+                if (a === b && b === c) {
+                    roundWon = true;
+                    winningCombo = winCondition;
+                    break;
+                }
+            }
+
+            if (roundWon) {
+                statusDisplay.textContent = `JOGADOR ${currentPlayer} VENCEU!`;
+                gameActive = false;
+                winSound.triggerAttackRelease(["C4", "E4", "G4"], "4n");
+                winningCombo.forEach(index => {
+                    document.querySelector(`[data-cell-index='${index}']`).classList.add('winning-cell');
+                });
+                return;
+            }
+
+            let roundDraw = !gameState.includes("");
+            if (roundDraw) {
+                statusDisplay.textContent = "DEU VELHA!";
+                gameActive = false;
+                drawSound();
+                return;
+            }
+
+            currentPlayer = currentPlayer === "X" ? "O" : "X";
+            statusDisplay.textContent = `Vez do Jogador ${currentPlayer}`;
+        }
+
+        function restartGame() {
+            gameActive = true;
+            currentPlayer = "X";
+            gameState = ["", "", "", "", "", "", "", "", ""];
+            statusDisplay.textContent = `Vez do Jogador ${currentPlayer}`;
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('x', 'o', 'winning-cell');
+            });
+        }
+        
+        // --- Inicialização ---
+        function createBoard() {
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.setAttribute('data-cell-index', i);
+                cell.addEventListener('click', handleCellClick);
+                board.appendChild(cell);
+            }
+        }
+        
+        createBoard();
+        restartButton.addEventListener('click', restartGame);
+    </script>
+</body>
+</html>
