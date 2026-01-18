@@ -63,7 +63,7 @@
         .game-name { position: absolute; bottom: 0; background: rgba(0,0,0,0.8); width: 100%; padding: 5px 0; font-size: 13px; }
     </style>
 </head>
-<body onclick="iniciarSom()">
+<body onclick="iniciarSom()" onmousemove="iniciarSom()">
 
     <div id="youtube-player" style="display:none"></div>
 
@@ -90,15 +90,21 @@
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
         var player;
+        var somIniciado = false;
+
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
                 height: '0', width: '0',
                 videoId: '-hBzOia4aoA',
-                playerVars: { 'autoplay': 1, 'loop': 1, 'playlist': '-hBzOia4aoA' }
+                playerVars: { 'autoplay': 1, 'loop': 1, 'playlist': '-hBzOia4aoA' },
+                events: {
+                    'onReady': function(event) {
+                        event.target.setVolume(50);
+                    }
+                }
             });
         }
 
-        // Contexto de áudio para o efeito SNES
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
         function playSnesBeep() {
@@ -107,7 +113,7 @@
             const gain = audioCtx.createGain();
             osc.type = 'square'; 
             osc.frequency.setValueAtTime(880, audioCtx.currentTime); 
-            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
             osc.connect(gain);
             gain.connect(audioCtx.destination);
@@ -116,7 +122,13 @@
         }
 
         function iniciarSom() {
-            if (player && player.playVideo) player.playVideo();
+            if (!somIniciado) {
+                if (player && player.playVideo) {
+                    player.playVideo();
+                    somIniciado = true;
+                }
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            }
         }
 
         document.querySelectorAll('.game-item').forEach(item => {
